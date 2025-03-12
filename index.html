@@ -360,8 +360,12 @@
             const cell = new PIXI.Graphics();
             cell.beginFill(gridData[y][x] || 0xFFFFFF);
             cell.lineStyle(1, 0xCCCCCC);
-            cell.drawRect(x * cellSize, y * cellSize, cellSize, cellSize);
+            cell.drawRect(0, 0, cellSize, cellSize);
             cell.endFill();
+            
+            // Position the cell
+            cell.x = x * cellSize;
+            cell.y = y * cellSize;
             
             // Store coordinates for easy access
             cell.x_coord = x;
@@ -413,24 +417,17 @@
       
       // Redraw grid when data changes
       redrawGrid() {
-        const cells = this.grid.children.filter(child => 
-          child instanceof PIXI.Graphics && 
-          child.x_coord !== undefined && 
-          child.y_coord !== undefined
-        );
-        
-        for (const cell of cells) {
-          const x = cell.x_coord;
-          const y = cell.y_coord;
-          
-          if (AppState.gridData[y] && AppState.gridData[y][x] !== undefined) {
-            cell.clear();
-            cell.beginFill(AppState.gridData[y][x] || 0xFFFFFF);
-            cell.lineStyle(1, 0xCCCCCC);
-            cell.drawRect(0, 0, AppState.cellSize, AppState.cellSize);
-            cell.endFill();
+        // Remove existing grid content and recreate it
+        if (this.grid) {
+          while (this.grid.children.length > 0) {
+            const child = this.grid.children[0];
+            this.grid.removeChild(child);
+            child.destroy();
           }
         }
+        
+        // Draw grid again from scratch
+        this.drawGrid();
       },
       
       // Handle cell interaction based on current tool
@@ -464,7 +461,7 @@
         // Update grid data
         AppState.gridData[y][x] = color;
         
-        // Redraw affected cell
+        // Find the cell at the given coordinates
         const cell = this.grid.children.find(child => 
           child instanceof PIXI.Graphics && 
           child.x_coord === x && 
@@ -472,11 +469,20 @@
         );
         
         if (cell) {
+          // Store the current position
+          const cellX = cell.x;
+          const cellY = cell.y;
+          
+          // Redraw the cell
           cell.clear();
           cell.beginFill(color || 0xFFFFFF);
           cell.lineStyle(1, 0xCCCCCC);
-          cell.drawRect(x * AppState.cellSize, y * AppState.cellSize, AppState.cellSize, AppState.cellSize);
+          cell.drawRect(0, 0, AppState.cellSize, AppState.cellSize);
           cell.endFill();
+          
+          // Ensure the position is maintained
+          cell.x = cellX;
+          cell.y = cellY;
         }
         
         // Save state to history with debounce
