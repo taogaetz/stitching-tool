@@ -1,0 +1,1153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cross-Stitch Pattern Designer</title>
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- PixiJS via CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/pixi.js@7.3.2/dist/pixi.min.js"></script>
+  <!-- FileSaver.js for exports -->
+  <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+  <style>
+    .noselect {
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      -khtml-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+    }
+    .color-box {
+      width: 24px;
+      height: 24px;
+      cursor: pointer;
+      border: 1px solid #ccc;
+      display: inline-block;
+      margin: 2px;
+    }
+    .color-box.selected {
+      border: 2px solid black;
+      box-shadow: 0 0 5px rgba(0,0,0,0.5);
+    }
+    #canvas-container {
+      overflow: hidden;
+      position: relative;
+    }
+    .tool-button.active {
+      background-color: #e5e7eb;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 h-screen flex flex-col">
+  <!-- Header -->
+  <header class="bg-pink-300 text-white p-4 shadow-md">
+    <div class="container mx-auto flex justify-between items-center">
+      <h1 class="text-2xl font-bold">Cross-Stitch Pattern Designer</h1>
+      <div class="flex space-x-2">
+        <button id="new-button" class="bg-white text-pink-500 px-3 py-1 rounded hover:bg-pink-100">New</button>
+        <button id="save-button" class="bg-white text-pink-500 px-3 py-1 rounded hover:bg-pink-100">Save</button>
+        <button id="load-button" class="bg-white text-pink-500 px-3 py-1 rounded hover:bg-pink-100">Load</button>
+        <button id="export-button" class="bg-white text-pink-500 px-3 py-1 rounded hover:bg-pink-100">Export</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-grow flex flex-col md:flex-row overflow-hidden">
+    <!-- Tools Panel -->
+    <div class="w-full md:w-64 bg-white p-4 shadow-md overflow-y-auto">
+      <div class="mb-6">
+        <h2 class="text-lg font-semibold mb-2">Tools</h2>
+        <div class="flex space-x-2">
+          <button id="pencil-tool" class="tool-button active p-2 rounded border border-gray-300 flex-1 text-center">✏️ Pencil</button>
+          <button id="eraser-tool" class="tool-button p-2 rounded border border-gray-300 flex-1 text-center">🧽 Erase</button>
+        </div>
+        <div class="flex space-x-2 mt-2">
+          <button id="fill-tool" class="tool-button p-2 rounded border border-gray-300 flex-1 text-center">🪣 Fill</button>
+          <button id="eyedropper-tool" class="tool-button p-2 rounded border border-gray-300 flex-1 text-center">👁️ Pick</button>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h2 class="text-lg font-semibold mb-2">Canvas Size</h2>
+        <div class="flex items-center mb-2">
+          <label for="grid-width" class="mr-2">Width:</label>
+          <input type="number" id="grid-width" min="5" max="200" value="30" class="w-16 p-1 border rounded mr-2">
+          <button id="resize-grid" class="bg-pink-300 text-white px-3 py-1 rounded hover:bg-pink-400">Resize</button>
+        </div>
+        <div class="flex items-center">
+          <label for="grid-height" class="mr-2">Height:</label>
+          <input type="number" id="grid-height" min="5" max="200" value="30" class="w-16 p-1 border rounded">
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h2 class="text-lg font-semibold mb-2">Color Palette</h2>
+        <div id="color-palette" class="flex flex-wrap">
+          <!-- Colors will be added here dynamically -->
+        </div>
+        <div class="mt-2">
+          <input type="color" id="custom-color" value="#ff0000" class="w-10 h-10">
+          <button id="add-color" class="bg-pink-300 text-white px-3 py-1 rounded hover:bg-pink-400 ml-2">Add Color</button>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h2 class="text-lg font-semibold mb-2">History</h2>
+        <div class="flex space-x-2">
+          <button id="undo-button" class="p-2 rounded border border-gray-300 flex-1 text-center" disabled>↩️ Undo</button>
+          <button id="redo-button" class="p-2 rounded border border-gray-300 flex-1 text-center" disabled>↪️ Redo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Canvas Area -->
+    <div class="flex-grow bg-white p-4 relative">
+      <div class="flex items-center space-x-2 mb-4">
+        <button id="zoom-in" class="bg-gray-200 hover:bg-gray-300 p-2 rounded">🔍+</button>
+        <button id="zoom-out" class="bg-gray-200 hover:bg-gray-300 p-2 rounded">🔍-</button>
+        <button id="reset-view" class="bg-gray-200 hover:bg-gray-300 p-2 rounded">Reset View</button>
+        <div id="zoom-level" class="text-sm">Zoom: 100%</div>
+      </div>
+      <div id="canvas-container" class="w-full h-[calc(100vh-14rem)] border border-gray-300 rounded bg-gray-50">
+        <!-- PixiJS canvas will be inserted here -->
+      </div>
+    </div>
+  </main>
+
+  <!-- Modals -->
+  <div id="save-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+    <div class="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+      <h2 class="text-xl font-bold mb-4">Save Pattern</h2>
+      <div class="mb-4">
+        <label for="pattern-name" class="block mb-2">Pattern Name:</label>
+        <input type="text" id="pattern-name" class="w-full p-2 border rounded" placeholder="My Pattern">
+      </div>
+      <div class="flex justify-end space-x-2">
+        <button id="cancel-save" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Cancel</button>
+        <button id="confirm-save" class="px-4 py-2 bg-pink-300 text-white rounded hover:bg-pink-400">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="load-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+    <div class="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+      <h2 class="text-xl font-bold mb-4">Load Pattern</h2>
+      <div id="saved-patterns-list" class="mb-4 max-h-60 overflow-y-auto">
+        <!-- Saved patterns will be listed here -->
+      </div>
+      <div class="flex justify-end space-x-2">
+        <button id="cancel-load" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="export-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+    <div class="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+      <h2 class="text-xl font-bold mb-4">Export Pattern</h2>
+      <div class="mb-4">
+        <button id="export-png" class="w-full mb-2 px-4 py-2 bg-pink-300 text-white rounded hover:bg-pink-400">Export as PNG</button>
+        <button id="export-json" class="w-full mb-2 px-4 py-2 bg-pink-300 text-white rounded hover:bg-pink-400">Export as JSON</button>
+      </div>
+      <div class="flex justify-end">
+        <button id="cancel-export" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="new-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+    <div class="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+      <h2 class="text-xl font-bold mb-4">Create New Pattern</h2>
+      <p class="mb-4 text-red-500">This will discard any unsaved changes.</p>
+      <div class="flex justify-end space-x-2">
+        <button id="cancel-new" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Cancel</button>
+        <button id="confirm-new" class="px-4 py-2 bg-pink-300 text-white rounded hover:bg-pink-400">Create New</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Application Script -->
+  <script>
+    // Application State
+    const AppState = {
+      currentColor: '#ff0000',
+      colors: ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#000000', '#ffffff'],
+      currentTool: 'pencil',
+      gridWidth: 30,
+      gridHeight: 30,
+      cellSize: 20,
+      scale: 1,
+      gridData: [],
+      history: [],
+      historyIndex: -1,
+      maxHistorySteps: 50,
+      isDragging: false,
+      lastPos: { x: 0, y: 0 },
+      viewportX: 0,
+      viewportY: 0,
+      
+      // Initialize grid data
+      initGridData() {
+        this.gridData = Array(this.gridHeight).fill().map(() => Array(this.gridWidth).fill(null));
+        this.history = [];
+        this.historyIndex = -1;
+        this.saveToHistory();
+      },
+      
+      // Get current state for history
+      getCurrentState() {
+        return JSON.parse(JSON.stringify(this.gridData));
+      },
+      
+      // Save current state to history
+      saveToHistory() {
+        // Discard any forward history if we're not at the end
+        if (this.historyIndex < this.history.length - 1) {
+          this.history = this.history.slice(0, this.historyIndex + 1);
+        }
+        
+        // Add current state to history
+        this.history.push(this.getCurrentState());
+        
+        // Limit history size
+        if (this.history.length > this.maxHistorySteps) {
+          this.history.shift();
+        } else {
+          this.historyIndex++;
+        }
+        
+        // Update UI
+        this.updateUndoRedoButtons();
+      },
+      
+      // Update undo/redo buttons state
+      updateUndoRedoButtons() {
+        const undoButton = document.getElementById('undo-button');
+        const redoButton = document.getElementById('redo-button');
+        
+        undoButton.disabled = this.historyIndex <= 0;
+        redoButton.disabled = this.historyIndex >= this.history.length - 1;
+      },
+      
+      // Undo action
+      undo() {
+        if (this.historyIndex > 0) {
+          this.historyIndex--;
+          this.gridData = JSON.parse(JSON.stringify(this.history[this.historyIndex]));
+          this.updateUndoRedoButtons();
+          CanvasModule.redrawGrid();
+        }
+      },
+      
+      // Redo action
+      redo() {
+        if (this.historyIndex < this.history.length - 1) {
+          this.historyIndex++;
+          this.gridData = JSON.parse(JSON.stringify(this.history[this.historyIndex]));
+          this.updateUndoRedoButtons();
+          CanvasModule.redrawGrid();
+        }
+      }
+    };
+
+    // Canvas Module
+    const CanvasModule = {
+      app: null,
+      grid: null,
+      container: null,
+      
+      // Initialize PixiJS app
+      init() {
+        // Create PixiJS application
+        this.app = new PIXI.Application({
+          backgroundAlpha: 0,
+          resizeTo: document.getElementById('canvas-container'),
+          antialias: true
+        });
+        
+        // Add app view to DOM
+        document.getElementById('canvas-container').appendChild(this.app.view);
+        
+        // Create container for grid
+        this.container = new PIXI.Container();
+        this.app.stage.addChild(this.container);
+        
+        // Set initial position
+        this.container.x = this.app.screen.width / 2;
+        this.container.y = this.app.screen.height / 2;
+        
+        // Create and draw grid
+        this.createGrid();
+        
+        // Set up event listeners
+        this.setupEventListeners();
+      },
+      
+      // Create grid graphics
+      createGrid() {
+        // Remove existing grid if it exists
+        if (this.grid) {
+          this.container.removeChild(this.grid);
+          this.grid.destroy();
+        }
+        
+        // Create new grid container
+        this.grid = new PIXI.Container();
+        this.container.addChild(this.grid);
+        
+        // Draw grid cells
+        this.drawGrid();
+        
+        // Center grid in view
+        const gridWidth = AppState.gridWidth * AppState.cellSize;
+        const gridHeight = AppState.gridHeight * AppState.cellSize;
+        this.grid.x = -gridWidth / 2;
+        this.grid.y = -gridHeight / 2;
+      },
+      
+      // Draw grid cells
+      drawGrid() {
+        const { gridWidth, gridHeight, cellSize, gridData } = AppState;
+        
+        // Draw grid background
+        const background = new PIXI.Graphics();
+        background.beginFill(0xFFFFFF);
+        background.drawRect(0, 0, gridWidth * cellSize, gridHeight * cellSize);
+        background.endFill();
+        this.grid.addChild(background);
+        
+        // Create row and column headers (numbers)
+        const headerSize = 20; // Size of the row/column headers
+        const indexContainer = new PIXI.Container();
+        this.grid.addChild(indexContainer);
+        
+        // Add column headers
+        for (let x = 0; x < gridWidth; x++) {
+          if (x % 5 === 0) { // Show every 5th column number for readability
+            const text = new PIXI.Text(x.toString(), {
+              fontFamily: 'Arial',
+              fontSize: 10,
+              fill: 0x000000,
+              align: 'center'
+            });
+            text.x = x * cellSize + cellSize / 2 - text.width / 2;
+            text.y = -headerSize + 5;
+            indexContainer.addChild(text);
+          }
+        }
+        
+        // Add row headers
+        for (let y = 0; y < gridHeight; y++) {
+          if (y % 5 === 0) { // Show every 5th row number for readability
+            const text = new PIXI.Text(y.toString(), {
+              fontFamily: 'Arial',
+              fontSize: 10,
+              fill: 0x000000,
+              align: 'center'
+            });
+            text.x = -headerSize + 5;
+            text.y = y * cellSize + cellSize / 2 - text.height / 2;
+            indexContainer.addChild(text);
+          }
+        }
+        
+        // Draw grid cells and lines
+        for (let y = 0; y < gridHeight; y++) {
+          for (let x = 0; x < gridWidth; x++) {
+            // Draw cell
+            const cell = new PIXI.Graphics();
+            cell.beginFill(gridData[y][x] || 0xFFFFFF);
+            cell.lineStyle(1, 0xCCCCCC);
+            cell.drawRect(x * cellSize, y * cellSize, cellSize, cellSize);
+            cell.endFill();
+            
+            // Store coordinates for easy access
+            cell.x_coord = x;
+            cell.y_coord = y;
+            
+            // Make cell interactive
+            cell.eventMode = 'static';
+            cell.cursor = 'pointer';
+            
+            // Add cell to grid
+            this.grid.addChild(cell);
+            
+            // We need to create closure variables to capture current x, y values
+            const cellX = x;
+            const cellY = y;
+            
+            // Handle cell click
+            cell.on('pointerdown', (event) => {
+              this.handleCellInteraction(cell, cellX, cellY, event);
+            });
+            
+            // Handle cell hover for drag drawing
+            cell.on('pointerover', (event) => {
+              if (event.buttons === 1) { // Left mouse button is down
+                this.handleCellInteraction(cell, cellX, cellY, event);
+              }
+            });
+          }
+        }
+        
+        // Draw grid markers (every 5 cells)
+        const markers = new PIXI.Graphics();
+        markers.lineStyle(1, 0x000000, 0.5);
+        
+        // Vertical markers
+        for (let x = 0; x <= gridWidth; x += 5) {
+          markers.moveTo(x * cellSize, 0);
+          markers.lineTo(x * cellSize, gridHeight * cellSize);
+        }
+        
+        // Horizontal markers
+        for (let y = 0; y <= gridHeight; y += 5) {
+          markers.moveTo(0, y * cellSize);
+          markers.lineTo(gridWidth * cellSize, y * cellSize);
+        }
+        
+        this.grid.addChild(markers);
+      },
+      
+      // Redraw grid when data changes
+      redrawGrid() {
+        const cells = this.grid.children.filter(child => 
+          child instanceof PIXI.Graphics && 
+          child.x_coord !== undefined && 
+          child.y_coord !== undefined
+        );
+        
+        for (const cell of cells) {
+          const x = cell.x_coord;
+          const y = cell.y_coord;
+          
+          if (AppState.gridData[y] && AppState.gridData[y][x] !== undefined) {
+            cell.clear();
+            cell.beginFill(AppState.gridData[y][x] || 0xFFFFFF);
+            cell.lineStyle(1, 0xCCCCCC);
+            cell.drawRect(0, 0, AppState.cellSize, AppState.cellSize);
+            cell.endFill();
+          }
+        }
+      },
+      
+      // Handle cell interaction based on current tool
+      handleCellInteraction(cell, x, y, event) {
+        const { currentTool, currentColor, gridData } = AppState;
+        
+        switch (currentTool) {
+          case 'pencil':
+            this.drawCell(x, y, currentColor);
+            break;
+          case 'eraser':
+            this.drawCell(x, y, null);
+            break;
+          case 'fill':
+            this.fillArea(x, y, currentColor);
+            break;
+          case 'eyedropper':
+            if (gridData[y][x]) {
+              AppState.currentColor = gridData[y][x];
+              UIModule.updateSelectedColor();
+            }
+            break;
+        }
+      },
+      
+      // Draw single cell
+      drawCell(x, y, color) {
+        // Skip if trying to draw same color
+        if (AppState.gridData[y][x] === color) return;
+        
+        // Update grid data
+        AppState.gridData[y][x] = color;
+        
+        // Redraw affected cell
+        const cell = this.grid.children.find(child => 
+          child instanceof PIXI.Graphics && 
+          child.x_coord === x && 
+          child.y_coord === y
+        );
+        
+        if (cell) {
+          cell.clear();
+          cell.beginFill(color || 0xFFFFFF);
+          cell.lineStyle(1, 0xCCCCCC);
+          cell.drawRect(x * AppState.cellSize, y * AppState.cellSize, AppState.cellSize, AppState.cellSize);
+          cell.endFill();
+        }
+        
+        // Save state to history with debounce
+        this.debouncedSaveHistory();
+      },
+      
+      // Debounced history save
+      debouncedSaveHistory: (() => {
+        let timeout;
+        return () => {
+          clearTimeout(timeout);
+          timeout = setTimeout(() => {
+            AppState.saveToHistory();
+          }, 300);
+        };
+      })(),
+      
+      // Fill connected area of same color
+      fillArea(x, y, newColor) {
+        const targetColor = AppState.gridData[y][x];
+        
+        // Don't fill if target is already the new color
+        if (targetColor === newColor) return;
+        
+        // Flood fill algorithm
+        const queue = [{x, y}];
+        const visited = new Set();
+        
+        while (queue.length > 0) {
+          const {x, y} = queue.shift();
+          const key = `${x},${y}`;
+          
+          if (
+            x < 0 || x >= AppState.gridWidth || 
+            y < 0 || y >= AppState.gridHeight ||
+            visited.has(key) ||
+            AppState.gridData[y][x] !== targetColor
+          ) {
+            continue;
+          }
+          
+          visited.add(key);
+          AppState.gridData[y][x] = newColor;
+          
+          // Add adjacent cells to queue
+          queue.push({x: x+1, y});
+          queue.push({x: x-1, y});
+          queue.push({x, y: y+1});
+          queue.push({x, y: y-1});
+        }
+        
+        // Redraw grid
+        this.redrawGrid();
+        
+        // Save state to history
+        AppState.saveToHistory();
+      },
+      
+      // Set up pan and zoom event listeners
+      setupEventListeners() {
+        const canvasContainer = document.getElementById('canvas-container');
+        
+        // Pan with middle mouse button
+        canvasContainer.addEventListener('mousedown', (e) => {
+          if (e.button === 1 || e.button === 0 && e.ctrlKey) { // Middle button or Ctrl+left button
+            e.preventDefault();
+            AppState.isDragging = true;
+            AppState.lastPos = { x: e.clientX, y: e.clientY };
+          }
+        });
+        
+        window.addEventListener('mouseup', () => {
+          AppState.isDragging = false;
+        });
+        
+        canvasContainer.addEventListener('mousemove', (e) => {
+          if (AppState.isDragging) {
+            const dx = e.clientX - AppState.lastPos.x;
+            const dy = e.clientY - AppState.lastPos.y;
+            
+            this.container.x += dx;
+            this.container.y += dy;
+            
+            AppState.lastPos = { x: e.clientX, y: e.clientY };
+          }
+        });
+        
+        // Zoom with mouse wheel
+        canvasContainer.addEventListener('wheel', (e) => {
+          e.preventDefault();
+          
+          // Get mouse position relative to container
+          const rect = canvasContainer.getBoundingClientRect();
+          const mouseX = e.clientX - rect.left;
+          const mouseY = e.clientY - rect.top;
+          
+          // Get position relative to container's center point
+          const pointX = mouseX - this.container.x;
+          const pointY = mouseY - this.container.y;
+          
+          // Calculate zoom factor
+          const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+          
+          // Limit zoom level
+          const newScale = Math.max(0.1, Math.min(5, AppState.scale * zoomFactor));
+          
+          // Apply zoom
+          const ratio = newScale / AppState.scale;
+          AppState.scale = newScale;
+          
+          this.container.scale.x = newScale;
+          this.container.scale.y = newScale;
+          
+          // Adjust position to zoom toward mouse point
+          this.container.x = mouseX - pointX * ratio;
+          this.container.y = mouseY - pointY * ratio;
+          
+          // Update zoom display
+          document.getElementById('zoom-level').textContent = `Zoom: ${Math.round(AppState.scale * 100)}%`;
+        });
+        
+        // Zoom buttons
+        document.getElementById('zoom-in').addEventListener('click', () => {
+          const newScale = Math.min(5, AppState.scale * 1.2);
+          AppState.scale = newScale;
+          this.container.scale.x = newScale;
+          this.container.scale.y = newScale;
+          document.getElementById('zoom-level').textContent = `Zoom: ${Math.round(AppState.scale * 100)}%`;
+        });
+        
+        document.getElementById('zoom-out').addEventListener('click', () => {
+          const newScale = Math.max(0.1, AppState.scale * 0.8);
+          AppState.scale = newScale;
+          this.container.scale.x = newScale;
+          this.container.scale.y = newScale;
+          document.getElementById('zoom-level').textContent = `Zoom: ${Math.round(AppState.scale * 100)}%`;
+        });
+        
+        // Reset view button
+        document.getElementById('reset-view').addEventListener('click', () => {
+          this.container.x = this.app.screen.width / 2;
+          this.container.y = this.app.screen.height / 2;
+          AppState.scale = 1;
+          this.container.scale.x = 1;
+          this.container.scale.y = 1;
+          document.getElementById('zoom-level').textContent = 'Zoom: 100%';
+        });
+        
+        // Window resize handler
+        window.addEventListener('resize', () => {
+          this.app.resize();
+        });
+      },
+      
+      // Resize grid
+      resizeGrid(width, height) {
+        const oldData = AppState.gridData;
+        
+        // Update AppState dimensions
+        AppState.gridWidth = width;
+        AppState.gridHeight = height;
+        
+        // Create new grid data preserving old data where possible
+        const newData = Array(height).fill().map((_, y) => 
+          Array(width).fill().map((_, x) => 
+            (y < oldData.length && x < oldData[0].length) ? oldData[y][x] : null
+          )
+        );
+        
+        AppState.gridData = newData;
+        
+        // Recreate grid
+        this.createGrid();
+        
+        // Save new state to history
+        AppState.saveToHistory();
+      }
+    };
+
+    // UI Module
+    const UIModule = {
+      init() {
+        this.setupColorPalette();
+        this.setupToolButtons();
+        this.setupHistoryButtons();
+        this.setupResizeControls();
+        this.setupModalButtons();
+      },
+      
+      // Set up color palette
+      setupColorPalette() {
+        const palette = document.getElementById('color-palette');
+        
+        // Clear existing colors
+        palette.innerHTML = '';
+        
+        // Add colors to palette
+        AppState.colors.forEach(color => {
+          this.addColorToPalette(color);
+        });
+        
+        // Set initial selected color
+        this.updateSelectedColor();
+        
+        // Add custom color button event
+        document.getElementById('add-color').addEventListener('click', () => {
+          const colorPicker = document.getElementById('custom-color');
+          const newColor = colorPicker.value;
+          
+          // Check if color already exists
+          if (!AppState.colors.includes(newColor)) {
+            AppState.colors.push(newColor);
+            this.addColorToPalette(newColor);
+          }
+          
+          // Select the new color
+          AppState.currentColor = newColor;
+          this.updateSelectedColor();
+        });
+      },
+      
+      // Add a single color to the palette
+      addColorToPalette(color) {
+        const palette = document.getElementById('color-palette');
+        const colorBox = document.createElement('div');
+        
+        colorBox.className = 'color-box';
+        colorBox.style.backgroundColor = color;
+        colorBox.dataset.color = color;
+        
+        colorBox.addEventListener('click', () => {
+          AppState.currentColor = color;
+          this.updateSelectedColor();
+        });
+        
+        palette.appendChild(colorBox);
+      },
+      
+      // Update selected color in UI
+      updateSelectedColor() {
+        const colorBoxes = document.querySelectorAll('.color-box');
+        
+        // Remove selected class from all boxes
+        colorBoxes.forEach(box => box.classList.remove('selected'));
+        
+        // Add selected class to current color box
+        const selectedBox = Array.from(colorBoxes).find(box => box.dataset.color === AppState.currentColor);
+        if (selectedBox) {
+          selectedBox.classList.add('selected');
+        }
+        
+        // Update color picker to match current color
+        document.getElementById('custom-color').value = AppState.currentColor;
+      },
+      
+      // Set up tool buttons
+      setupToolButtons() {
+        const tools = ['pencil', 'eraser', 'fill', 'eyedropper'];
+        
+        tools.forEach(tool => {
+          const button = document.getElementById(`${tool}-tool`);
+          
+          button.addEventListener('click', () => {
+            // Update current tool
+            AppState.currentTool = tool;
+            
+            // Update UI
+            document.querySelectorAll('.tool-button').forEach(btn => {
+              btn.classList.remove('active');
+            });
+            button.classList.add('active');
+          });
+        });
+      },
+      
+      // Set up undo/redo buttons
+      setupHistoryButtons() {
+        document.getElementById('undo-button').addEventListener('click', () => {
+          AppState.undo();
+        });
+        
+        document.getElementById('redo-button').addEventListener('click', () => {
+          AppState.redo();
+        });
+      },
+      
+      // Set up resize controls
+      setupResizeControls() {
+        const widthInput = document.getElementById('grid-width');
+        const heightInput = document.getElementById('grid-height');
+        
+        // Set initial values
+        widthInput.value = AppState.gridWidth;
+        heightInput.value = AppState.gridHeight;
+        
+        // Handle resize button click
+        document.getElementById('resize-grid').addEventListener('click', () => {
+          const width = Math.min(200, Math.max(5, parseInt(widthInput.value) || 30));
+          const height = Math.min(200, Math.max(5, parseInt(heightInput.value) || 30));
+          
+          // Update inputs with validated values
+          widthInput.value = width;
+          heightInput.value = height;
+          
+          // Resize grid
+          CanvasModule.resizeGrid(width, height);
+        });
+      },
+      
+      // Set up modal buttons
+      setupModalButtons() {
+        // New pattern
+        document.getElementById('new-button').addEventListener('click', () => {
+          document.getElementById('new-modal').classList.remove('hidden');
+        });
+        
+        document.getElementById('cancel-new').addEventListener('click', () => {
+          document.getElementById('new-modal').classList.add('hidden');
+        });
+        
+        document.getElementById('confirm-new').addEventListener('click', () => {
+          document.getElementById('new-modal').classList.add('hidden');
+          
+          // Reset grid to default size
+          document.getElementById('grid-width').value = 30;
+          document.getElementById('grid-height').value = 30;
+          
+          // Create new grid
+          AppState.gridWidth = 30;
+          AppState.gridHeight = 30;
+          AppState.initGridData();
+          CanvasModule.createGrid();
+        });
+        
+        // Save pattern
+        document.getElementById('save-button').addEventListener('click', () => {
+          document.getElementById('save-modal').classList.remove('hidden');
+        });
+        
+        document.getElementById('cancel-save').addEventListener('click', () => {
+          document.getElementById('save-modal').classList.add('hidden');
+        });
+        
+        document.getElementById('confirm-save').addEventListener('click', () => {
+          const name = document.getElementById('pattern-name').value || 'Untitled Pattern';
+          this.savePattern(name);
+          document.getElementById('save-modal').classList.add('hidden');
+        });
+        
+        // Load pattern
+        document.getElementById('load-button').addEventListener('click', () => {
+          this.populateSavedPatterns();
+          document.getElementById('load-modal').classList.remove('hidden');
+        });
+        
+        document.getElementById('cancel-load').addEventListener('click', () => {
+          document.getElementById('load-modal').classList.add('hidden');
+        });
+        
+        // Export pattern
+        document.getElementById('export-button').addEventListener('click', () => {
+          document.getElementById('export-modal').classList.remove('hidden');
+        });
+        
+        document.getElementById('cancel-export').addEventListener('click', () => {
+          document.getElementById('export-modal').classList.add('hidden');
+        });
+        
+        document.getElementById('export-png').addEventListener('click', () => {
+          this.exportAsPNG();
+          document.getElementById('export-modal').classList.add('hidden');
+        });
+        
+        document.getElementById('export-json').addEventListener('click', () => {
+          this.exportAsJSON();
+          document.getElementById('export-modal').classList.add('hidden');
+        });
+      },
+      
+      // Save pattern to localStorage
+      savePattern(name) {
+        // Get existing patterns
+        const savedPatterns = JSON.parse(localStorage.getItem('cross-stitch-patterns') || '{}');
+        
+        // Create pattern data
+        const patternData = {
+          name,
+          date: new Date().toISOString(),
+          width: AppState.gridWidth,
+          height: AppState.gridHeight,
+          colors: AppState.colors,
+          grid: AppState.gridData
+        };
+        
+        // Add to saved patterns
+        savedPatterns[name] = patternData;
+        
+        // Save to localStorage
+        localStorage.setItem('cross-stitch-patterns', JSON.stringify(savedPatterns));
+        
+        // Show confirmation
+        alert(`Pattern "${name}" saved successfully!`);
+      },
+      
+      // Populate saved patterns list
+      populateSavedPatterns() {
+        const listElement = document.getElementById('saved-patterns-list');
+        listElement.innerHTML = '';
+        
+        // Get saved patterns
+        const savedPatterns = JSON.parse(localStorage.getItem('cross-stitch-patterns') || '{}');
+        
+        if (Object.keys(savedPatterns).length === 0) {
+          listElement.innerHTML = '<p class="text-gray-500">No saved patterns found.</p>';
+          return;
+        }
+        
+        // Create list items
+        Object.entries(savedPatterns).forEach(([key, pattern]) => {
+          const item = document.createElement('div');
+          item.className = 'p-2 border-b hover:bg-gray-100 flex justify-between items-center';
+          
+          const dateObj = new Date(pattern.date);
+          const dateStr = dateObj.toLocaleDateString();
+          
+          item.innerHTML = `
+            <div>
+              <div class="font-medium">${pattern.name}</div>
+              <div class="text-sm text-gray-500">${pattern.width}×${pattern.height} • ${dateStr}</div>
+            </div>
+            <div class="flex space-x-2">
+              <button class="text-blue-500 hover:text-blue-700 load-pattern" data-name="${key}">Load</button>
+              <button class="text-red-500 hover:text-red-700 delete-pattern" data-name="${key}">Delete</button>
+            </div>
+          `;
+          
+          listElement.appendChild(item);
+        });
+        
+        // Add event listeners to buttons
+        document.querySelectorAll('.load-pattern').forEach(button => {
+          button.addEventListener('click', () => {
+            const name = button.dataset.name;
+            this.loadPattern(name);
+            document.getElementById('load-modal').classList.add('hidden');
+          });
+        });
+        
+        document.querySelectorAll('.delete-pattern').forEach(button => {
+          button.addEventListener('click', () => {
+            const name = button.dataset.name;
+            if (confirm(`Are you sure you want to delete "${name}"?`)) {
+              this.deletePattern(name);
+              this.populateSavedPatterns();
+            }
+          });
+        });
+      },
+      
+      // Load pattern from localStorage
+      loadPattern(name) {
+        // Get saved patterns
+        const savedPatterns = JSON.parse(localStorage.getItem('cross-stitch-patterns') || '{}');
+        const pattern = savedPatterns[name];
+        
+        if (!pattern) return;
+        
+        // Update AppState
+        AppState.gridWidth = pattern.width;
+        AppState.gridHeight = pattern.height;
+        AppState.gridData = pattern.grid;
+        AppState.colors = pattern.colors || AppState.colors;
+        
+        // Update UI
+        document.getElementById('grid-width').value = pattern.width;
+        document.getElementById('grid-height').value = pattern.height;
+        
+        // Recreate grid
+        CanvasModule.createGrid();
+        
+        // Update color palette
+        this.setupColorPalette();
+        
+        // Reset history
+        AppState.history = [];
+        AppState.historyIndex = -1;
+        AppState.saveToHistory();
+      },
+      
+      // Delete pattern from localStorage
+      deletePattern(name) {
+        // Get saved patterns
+        const savedPatterns = JSON.parse(localStorage.getItem('cross-stitch-patterns') || '{}');
+        
+        // Delete the pattern
+        delete savedPatterns[name];
+        
+        // Save updated patterns
+        localStorage.setItem('cross-stitch-patterns', JSON.stringify(savedPatterns));
+      },
+      
+      // Export as PNG
+      exportAsPNG() {
+        // Render to get proper image
+        CanvasModule.app.render();
+        
+        // Save current scale and position
+        const origScale = CanvasModule.container.scale.x;
+        const origX = CanvasModule.container.x;
+        const origY = CanvasModule.container.y;
+        
+        // Reset position and scale for clean export
+        CanvasModule.container.scale.x = CanvasModule.container.scale.y = 1;
+        CanvasModule.container.x = CanvasModule.app.screen.width / 2;
+        CanvasModule.container.y = CanvasModule.app.screen.height / 2;
+        
+        // Add padding for row/column headers
+        const headerPadding = 24; // Extra space for headers
+        
+        // Create a new PIXI renderer for export with extra space for headers
+        const renderer = new PIXI.Renderer({
+          width: AppState.gridWidth * AppState.cellSize + headerPadding,
+          height: AppState.gridHeight * AppState.cellSize + headerPadding,
+          backgroundColor: 0xFFFFFF
+        });
+        
+        // Create a container for the export
+        const exportContainer = new PIXI.Container();
+        
+        // Create a clone of the grid for export
+        const gridClone = new PIXI.Container();
+        
+        // Position with offset for headers
+        gridClone.x = headerPadding;
+        gridClone.y = headerPadding;
+        
+        // Add background
+        const background = new PIXI.Graphics();
+        background.beginFill(0xFFFFFF);
+        background.drawRect(0, 0, AppState.gridWidth * AppState.cellSize, AppState.gridHeight * AppState.cellSize);
+        background.endFill();
+        gridClone.addChild(background);
+        
+        // Draw grid and cells in export version
+        for (let y = 0; y < AppState.gridHeight; y++) {
+          for (let x = 0; x < AppState.gridWidth; x++) {
+            const cell = new PIXI.Graphics();
+            cell.beginFill(AppState.gridData[y][x] || 0xFFFFFF);
+            cell.lineStyle(1, 0xCCCCCC);
+            cell.drawRect(x * AppState.cellSize, y * AppState.cellSize, AppState.cellSize, AppState.cellSize);
+            cell.endFill();
+            gridClone.addChild(cell);
+          }
+        }
+        
+        // Draw grid markers (every 5 cells)
+        const markers = new PIXI.Graphics();
+        markers.lineStyle(1, 0x000000, 0.5);
+        
+        // Vertical markers
+        for (let x = 0; x <= AppState.gridWidth; x += 5) {
+          markers.moveTo(x * AppState.cellSize, 0);
+          markers.lineTo(x * AppState.cellSize, AppState.gridHeight * AppState.cellSize);
+        }
+        
+        // Horizontal markers
+        for (let y = 0; y <= AppState.gridHeight; y += 5) {
+          markers.moveTo(0, y * AppState.cellSize);
+          markers.lineTo(AppState.gridWidth * AppState.cellSize, y * AppState.cellSize);
+        }
+        gridClone.addChild(markers);
+        
+        // Add row and column headers
+        // Add column headers
+        for (let x = 0; x < AppState.gridWidth; x++) {
+          if (x % 5 === 0) { // Show every 5th column number
+            const text = new PIXI.Text(x.toString(), {
+              fontFamily: 'Arial',
+              fontSize: 10,
+              fill: 0x000000,
+              align: 'center'
+            });
+            text.x = headerPadding + x * AppState.cellSize + AppState.cellSize / 2 - text.width / 2;
+            text.y = 5;
+            exportContainer.addChild(text);
+          }
+        }
+        
+        // Add row headers
+        for (let y = 0; y < AppState.gridHeight; y++) {
+          if (y % 5 === 0) { // Show every 5th row number
+            const text = new PIXI.Text(y.toString(), {
+              fontFamily: 'Arial',
+              fontSize: 10,
+              fill: 0x000000,
+              align: 'center'
+            });
+            text.x = 5;
+            text.y = headerPadding + y * AppState.cellSize + AppState.cellSize / 2 - text.height / 2;
+            exportContainer.addChild(text);
+          }
+        }
+        
+        // Add the grid to the export container
+        exportContainer.addChild(gridClone);
+        
+        // Render the export container
+        renderer.render(exportContainer);
+        
+        // Get data URL
+        const dataUrl = renderer.view.toDataURL('image/png');
+        
+        // Create temporary link to download
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = 'cross-stitch-pattern.png';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        // Restore original position and scale
+        CanvasModule.container.scale.x = CanvasModule.container.scale.y = origScale;
+        CanvasModule.container.x = origX;
+        CanvasModule.container.y = origY;
+        
+        // Clean up
+        renderer.destroy();
+      },
+      
+      // Export as JSON
+      exportAsJSON() {
+        // Create JSON data
+        const patternData = {
+          name: document.getElementById('pattern-name').value || 'Untitled Pattern',
+          date: new Date().toISOString(),
+          width: AppState.gridWidth,
+          height: AppState.gridHeight,
+          colors: AppState.colors,
+          grid: AppState.gridData
+        };
+        
+        // Convert to JSON string
+        const jsonStr = JSON.stringify(patternData, null, 2);
+        
+        // Create blob and save
+        const blob = new Blob([jsonStr], {type: 'application/json'});
+        saveAs(blob, 'cross-stitch-pattern.json');
+      }
+    };
+
+    // Pattern Management Module
+    const PatternModule = {
+      init() {
+        // This module's functionality is integrated into UIModule
+        // It handles saving, loading, and exporting patterns
+      }
+    };
+
+    // Initialize application
+    function init() {
+      // Initialize app state
+      AppState.initGridData();
+      
+      // Initialize modules
+      CanvasModule.init();
+      UIModule.init();
+      PatternModule.init();
+    }
+
+    // Load application when DOM is ready
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
